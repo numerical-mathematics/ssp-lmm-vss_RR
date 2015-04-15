@@ -202,7 +202,7 @@ def plot_stepsize_cfl(problem,methods,solution_data,saveplot=True):
         axright.set_ylim([ymin_raxis,ymax_raxis])
 
     if saveplot:
-        file_name = 'figures/'+problem + methods[0] +'.pdf'
+        file_name = 'figures/'+problem+'.pdf'
         fig.savefig(file_name,bbox_inches='tight')
     else:
         plt.show()
@@ -336,7 +336,7 @@ def plot_err(data,saveplot=True):
             ax.loglog(dx,dx**3*err[mid_index,j]/dx[mid_index]**3,'--',c=ls[j],linewidth=2)
         elif 'SSP104' in methods:
             ax.loglog(dx,dx**4*err[mid_index,j]/dx[mid_index]**4,'--',c=ls[j],linewidth=2)
-    ax.legend(methods,loc='lower right',fontsize=16)    
+    ax.legend(methods,loc='best',fontsize=16)    
     ax.set_xlabel('$\Delta x$',fontsize=18)
     ax.set_ylabel('$\||error\||_'+str(norm)+'$',fontsize=18,rotation=0,position=(0,.5))
     ax.yaxis.labelpad = 35
@@ -428,7 +428,7 @@ def default_parameters(problem):
 #=========================================================
 # Functions to reproduce data used in paper
 #=========================================================
-def tab1_getdata(norm=1,grid_level=[7,11],use_petsc=False):
+def tab1_createdata(norm=1,grid_level=[7,11],use_petsc=False):
     r"""
     Converence test for advection 1D problem with sinusoidal initial data and variable-in-time velocity.
     Error between exact and numerical solution is measured in a given norm.
@@ -544,7 +544,7 @@ def fig_tab1(plot=True):
 
     filename = 'data/convergence_advection.pkl'
     if not os.path.isfile(filename):
-        tab1_getdata()
+        tab1_createdata()
 
     data = pickle.load(open(filename, "rb"))
 
