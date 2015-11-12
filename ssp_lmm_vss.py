@@ -74,6 +74,9 @@ lim_type = {
     'SSP104':   2
     }
 
+spatial = {'1':'TVD','2':'WENO'}
+limiters = {'0':'weno','1':'Minmod','2':'Superbee','3':'Van leer','4':'MC'}
+
 class Data:
     r"""
     Class for solution data objects.
@@ -141,11 +144,14 @@ def run(problem,N=256,method='SSPLMM32',steps=None,solver_type='sharpclaw',cfl_n
     data = Data(problem,method)
     data.status = status
     data.delta = claw.solution.domain.grid.delta
-    data.lim_type = claw.solver.lim_type
-    data.limiters = claw.solver.limiters
     data.check_lmm_cond = claw.solver.check_lmm_cond
     data.use_petsc = paramtrs.use_petsc
     data.tv_check = claw.solver.tv_check
+    data.lim_type = claw.solver.lim_type
+    if data.lim_type == 1:
+        data.limiters = claw.solver.limiters
+    else:
+        data.limiters = 0
 
     return data
 
@@ -155,11 +161,9 @@ def plot_stepsize_cfl(problem,methods,solution_data,saveplot=True):
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots()
+    fig2, (ax2, ax3) = plt.subplots(1,2)
     axright = ax.twinx()
-    ymax = 0.0
-    if not 'SSPLMM' in methods:
-        ymax_raxis = 0.0
-        ymin_raxis = np.inf
+    ax3right = ax3.twinx()
 
     marks = ['b','r','k','m']
 
@@ -172,58 +176,104 @@ def plot_stepsize_cfl(problem,methods,solution_data,saveplot=True):
         dx = max(data.delta[:])
         maxwavespeed = np.asarray(status['maxwavespeed'][:-1])
         cfl_number = dt/dx*maxwavespeed
-        num_steps_fixed_dt = int(np.ceil(status['time'][-1]/min(dt)))
+        k = int(method[-2])
+        num_steps_fixed_dt = np.ceil((t[-1]- t[0]-sum(dt[:k-1]))/min(dt[k-1:]))
 
         print '\nProblem: {0}, method: {1}, steps with vss / steps with fss: {2:d}/{3:d} = {4:.4f}' \
-            .format(problem,method,status['totalnumsteps'],num_steps_fixed_dt, \
-            1.*status['totalnumsteps']/num_steps_fixed_dt)
-        print 'lim_type =',data.lim_type,', limiter =',data.limiters, \
-                ', rejected steps =',status['totalnumsteps'] - status['numsteps'],\
+            .format(problem,method,status['totalnumsteps'],int(num_steps_fixed_dt), \
+            (status['totalnumsteps']-k)/num_steps_fixed_dt)
+        print 'lim_type =',spatial[str(data.lim_type)],', limiter =',limiters[str(data.limiters)], \
+                ', rejected steps =',status['totalnumsteps'] - status['numsteps'], \
                 ', check_lmm_cond =',data.check_lmm_cond,', use_petsc =',data.use_petsc
 
         # plot stepsize and cfl against time
-        ax.plot(t,dt/dx,ls,linewidth=2)
-        axright.plot(t,cfl_number,'--'+ls,linewidth=2)
-        ymax = max(ymax,1.05*ax.get_ylim()[1])
-        if not 'SSPLMM' in methods:
-            ymax_raxis = max(ymax_raxis,1.05*max(cfl_number))
-            ymin_raxis = min(ymin_raxis,0.7*min(cfl_number))
+        ax, ymin, ymax = plot(method,ax,t,dt/dx,ls)
+        axright, ymin_raxis, ymax_raxis = plot(method,axright,t,cfl_number,ls,raxis=True)
+
+        # close up plot of stepsize against time
+        ax2,_,_ = plot(method,ax2,t,dt/dx,ls,closeup=True)
+        ax3right,_,_ = plot(method,ax3right,t,cfl_number,ls,raxis=True,closeup=True)
 
     print '\n'
 
-    ax = plot_formatting(ax,methods[:],ymax)
-    ax.set_ylabel(r'$\frac{h_n}{\Delta x}$')
-    axright.set_ylabel(r'$\nu_n$',labelpad=25,fontsize=26,rotation=0,position=(0,.5))
-    axright.tick_params(labelsize=16)
-    if any("SSPLMM" in method for method in methods):
-        #axright.set_ylim([0.15,0.35])
-        axright.set_ylim([0.0,0.35])
-    else:
-        axright.set_ylim([ymin_raxis,ymax_raxis])
+    # formating plots
+    stepsizeoverdx = r'$\frac{h_n}{\Delta x}$'
+    cfl = r'$\nu_n$'
+    ylim = [ymin,ymax]
+    xlim = [0.0,t[35]]
+    yrightlim = [ymin_raxis,ymax_raxis]
+
+    plot_formatting(methods[:],ax,stepsizeoverdx,ylim,axright=axright,ylabelright=cfl, \
+        yrightlim=yrightlim)
+
+    plot_formatting(methods[:],ax2,stepsizeoverdx,ylim,nbins=4,xlim=xlim,lgd=False)
+    yrightlim = [0.0,1.05*ax3right.get_ylim()[1]]
+    plot_formatting(methods[:],ax3,'',None,axright=ax3right,ylabelright=cfl,yrightlim=yrightlim, \
+        nbins=4,xlim=xlim)
 
     if saveplot:
         file_name = 'figures/'+problem+'.pdf'
+        file_name2 = 'figures/'+problem+'_zoom.pdf'
         fig.savefig(file_name,bbox_inches='tight')
+        fig2.savefig(file_name2,bbox_inches='tight')
+        plt.close("all")
     else:
         plt.show()
 
-    plt.close("all")
+def plot(method,ax,x,y,ls,raxis=False,closeup=False):
+    if raxis == True:
+        line = '--'+ls
+        if "SSPLMM" in method:
+            ymin = 0.0
+            ymax = 0.35
+        else:
+            ymin = 0.7*min(y)
+            ymax = 1.05*max(y)
+    else:
+        line = ls
+        ymin = 0.0
+        ymax = 1.05*ax.get_ylim()[1]
 
-def plot_formatting(ax,methods,ymax):
+    ax.plot(x,y,line,linewidth=2)
+
+    if closeup == True and "SSPLMM" in method:
+        k = int(method[-2])
+        ax.plot(x[:k-1],y[:k-1],'Dk',markersize=6,markeredgewidth=2,fillstyle='none', \
+            label="_nolegend_")
+        ax.plot(x[k-1:],y[k-1:],'o'+ls,markersize=6,markeredgewidth=1.5,fillstyle='none', \
+            label="_nolegend_")
+
+    return ax, ymin, ymax
+
+
+def plot_formatting(methods,ax,ylabel,ylim,axright=None,ylabelright=None,yrightlim=None, \
+    nbins=6,xlim=None,lgd=True):
     ax.set_xlabel('$t$',fontsize=26)
-    ax.set_ylabel('',labelpad=20,fontsize=32,rotation=0,position=(0,.4))
+    ax.set_ylabel(ylabel,labelpad=20,fontsize=32,rotation=0,position=(0,.4))
     ax.tick_params(labelsize=16)
     ax.tick_params(axis='x',pad=8)
-    ax.locator_params(axis='x', nbins=6)
-    ax.set_ylim([0.0,ymax])
+    ax.locator_params(axis='x', nbins=nbins)
+    ax.set_ylim(ylim)
+    if xlim is not None:
+        ax.set_xlim(xlim)
+    if ylim is None:
+        ax.axes.get_yaxis().set_visible(False)
+    if axright is not None:
+        axright.set_ylabel(ylabelright,labelpad=25,fontsize=26,rotation=0,position=(0,.5))
+        axright.tick_params(labelsize=16)
+        axright.set_ylim(yrightlim)
     #ax.yaxis.get_major_ticks()[0].set_visible(False)
 
-    for i,method in enumerate(methods):
-        if 'SSPLMM' in method:
-            methods[i] = 'SSPMSV' + methods[i][-2:]
-    ax.legend(methods,loc='best',fontsize=20)
-
-    return ax
+    if lgd == True:
+        for i,method in enumerate(methods):
+            if 'SSPLMM' in method:
+                methods[i] = 'SSPMSV' + methods[i][-2:]
+        if ylim is None:
+           axright.legend(methods,loc='best',fontsize=20)
+        else:
+           ax.legend(methods,loc='best',fontsize=20)
+    else:
+        ax.legend('',frameon=False)
 
 
 def convergence_advection(methods=['SSPLMMk2','SSPLMMk3'],cfl_nums=None,lim_type=2,limiter=4,norm=2, \

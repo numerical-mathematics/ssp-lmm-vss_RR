@@ -31,13 +31,12 @@ def create_data(problems,methods,cfl_nums,lim_type):
             if data is not None:
                 solution_data = {}
                 solution_data[method] = data
-                output = open(problem+'_'+method+'.pkl', "wb")
+                output = open('data/'+problem+'_'+method+'.pkl', "wb")
                 pickle.dump(solution_data, output, -1)
                 output.close()
 
 if __name__=="__main__":
     methods=['SSPLMM32','SSPLMM43']
-    methods=['SSPLMM43']
     cfl_nums = {'SSPLMM32': [0.24,0.25],'SSPLMM43': [0.15,1/6.]}
     lim_type = {'SSPLMM32': 1,'SSPLMM43': 2}
     
